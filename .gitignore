@@ -1,0 +1,14 @@
+# real measurements contain your network name (SSID) and router address (BSSID)
+measurements-*.csv
+# saved projects may contain a photo of your floor plan
+*.json
+!.claude/launch.json
+# test tool output
+.playwright-cli/
+__pycache__/
+.env
+# private notes (mention the job application), stay on this computer
+CLAUDE.md
+docs/DECISIONS.md
+.claude/
+odgovor-*.txt

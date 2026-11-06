@@ -1,0 +1,6 @@
+place,rssi_median,rssi_min,rssi_max,loss_pct,ping_avg_ms,samples,ssid,bssid,band,channel,time,verdict
+dnevna,-46,-46,-45,0.0,6.1,3,FAKE,00:00:00:00:00:00,5 GHz,36,2026-11-06T18:59:06,OK
+hodnik,-49,-53,-49,0.0,13.5,3,FAKE,00:00:00:00:00:00,5 GHz,36,2026-11-06T18:59:09,OK
+stepenice,-59,-59,-57,0.0,6.9,3,FAKE,00:00:00:00:00:00,5 GHz,36,2026-11-06T18:59:12,OK
+podrum,-67,-68,-63,0.0,7.8,3,FAKE,00:00:00:00:00:00,5 GHz,36,2026-11-06T18:59:15,OK
+vrata podruma,-73,-75,-72,0.0,12.2,3,FAKE,00:00:00:00:00:00,5 GHz,36,2026-11-06T18:59:18,OK

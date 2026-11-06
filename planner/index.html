@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wi-Fi Coverage Planner</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='8' cy='8' r='7' fill='%230b6e69'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <strong>Wi-Fi Coverage Planner</strong>
+    <span class="sub">where to put the next router / mesh node</span>
+  </div>
+  <div class="file-actions">
+    <label class="btn">Load floor plan<input type="file" id="fileImage" accept="image/*" hidden></label>
+    <label class="btn">Import measurements (CSV)<input type="file" id="fileCsv" accept=".csv,text/csv" hidden></label>
+    <button class="btn" id="btnDemo">Demo house</button>
+    <span class="sep"></span>
+    <button class="btn" id="btnSave">Save project</button>
+    <label class="btn">Open project<input type="file" id="fileProject" accept=".json,application/json" hidden></label>
+    <button class="btn" id="btnPng">Export image</button>
+    <button class="btn ghost" id="btnNew">New</button>
+  </div>
+</header>
+
+<main class="layout">
+  <nav class="tools" id="tools" aria-label="Tools">
+    <button data-tool="move" title="Move things (M)">Move<kbd>M</kbd></button>
+    <button data-tool="scale" title="Set scale: click two points, type real distance (S)">Scale<kbd>S</kbd></button>
+    <button data-tool="wall" title="Draw walls: click, click... Esc to stop. Shift = straight (W)">Wall<kbd>W</kbd></button>
+    <button data-tool="ap" title="Place an existing router / access point (R)">Router<kbd>R</kbd></button>
+    <button data-tool="area" title="Drag a box over the area that needs coverage (A)">Area<kbd>A</kbd></button>
+    <button data-tool="pin" title="Pin a measurement: pick it in the list, click on the plan (P)">Pin<kbd>P</kbd></button>
+    <button data-tool="label" title="Add a text label (T)">Label<kbd>T</kbd></button>
+    <button data-tool="erase" title="Click a thing to delete it (E)">Erase<kbd>E</kbd></button>
+    <div class="material" id="materialBox">
+      <span>Wall type</span>
+      <select id="material"></select>
+    </div>
+  </nav>
+
+  <section class="stage">
+    <div class="hint" id="hint"></div>
+    <div class="canvas-wrap" id="wrap">
+      <canvas id="cv"></canvas>
+    </div>
+    <div class="legend" id="legend"></div>
+  </section>
+
+  <aside class="panel">
+    <section>
+      <h2>Suggestion</h2>
+      <div class="row">
+        <button class="btn primary" id="btnSuggest">Suggest next device</button>
+        <button class="btn ghost" id="btnClearSug">Clear</button>
+      </div>
+      <div class="stats" id="stats"></div>
+      <ol class="sug-list" id="sugList"></ol>
+    </section>
+
+    <section>
+      <h2>Settings</h2>
+      <label class="field">Band
+        <select id="band"><option value="2.4">2.4 GHz</option><option value="5">5 GHz</option></select>
+      </label>
+      <label class="field">"Good enough" signal <span class="val" id="thrVal"></span>
+        <input type="range" id="threshold" min="-85" max="-60" step="1">
+      </label>
+      <label class="field check"><input type="checkbox" id="mesh"> New device is wireless (mesh), it must hear another device</label>
+      <label class="field">Mesh link needs at least <span class="val" id="bhVal"></span>
+        <input type="range" id="backhaul" min="-80" max="-55" step="1">
+      </label>
+      <label class="field">Max new devices
+        <input type="number" id="maxNew" min="1" max="6" step="1">
+      </label>
+      <details>
+        <summary>Signal model</summary>
+        <label class="field">Signal 1 m from router <span class="val" id="p1mVal"></span>
+          <input type="range" id="p1m" min="-60" max="-25" step="1">
+        </label>
+        <label class="field">How fast signal fades (n) <span class="val" id="nVal"></span>
+          <input type="range" id="nExp" min="1.6" max="5" step="0.1">
+        </label>
+        <button class="btn" id="btnCalib">Match model to my measurements</button>
+        <p class="small" id="calibInfo"></p>
+      </details>
+    </section>
+
+    <section>
+      <h2>Measurements</h2>
+      <p class="small" id="measHint">Run <code>python measure/measure.py</code>, walk around, then import the CSV here.</p>
+      <table class="meas" id="measTable"></table>
+      <canvas id="chart" width="320" height="140" aria-label="Signal along the walk"></canvas>
+    </section>
+  </aside>
+</main>
+
+<script src="../examples/demo.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
