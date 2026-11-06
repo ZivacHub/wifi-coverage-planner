@@ -40,7 +40,7 @@ Options: `--seconds 20` (longer per spot), `--target 192.168.1.1` (what to ping,
 
 **Plan:** open `planner/index.html` in a browser (double-click is enough).
 
-1. *Load floor plan* (a photo or scan of the plan works) – or use the demo house.
+1. *Load floor plan*: a photo, a scan or a blue blueprint (PNG/JPG). You can also drag the picture onto the plan or paste a screenshot with Ctrl+V. A blueprint (white lines on blue) is noticed and shown as dark lines on white, so the coverage colours stay readable; *Settings › Floor plan image* switches between colour, black and white, blueprint, and fades the picture. A PDF plan: take a screenshot of it first. Or open one of the *Demos*: a house, an office floor drawn on a blue blueprint, or a small town covered by rooftop mesh nodes.
 2. **Scale**: click two ends of something you know the length of, type metres.
 3. **Wall**: draw the walls, pick the wall type (drywall, brick, concrete, metal...).
 4. **Router**: click where your router is.
@@ -97,7 +97,7 @@ signal (dBm) = signal at 1 m  −  10 · n · log10(distance in m)  −  loss of
 measure/measure.py     walk-and-measure script (Python standard library only)
 planner/index.html     the planner (plain HTML + JS, no build, no internet needed)
 planner/app.js         signal model, calibration, suggestion
-examples/demo.js       demo house (made-up measurements)
+examples/demo.js       demos: house, office floor on a blueprint, small town (all made up)
 examples/fake-walk.csv sample CSV from measure.py --fake
 ```
 

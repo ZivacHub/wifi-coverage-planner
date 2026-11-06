@@ -14,9 +14,9 @@
     <span class="sub">where to put the next router / mesh node</span>
   </div>
   <div class="file-actions">
-    <label class="btn">Load floor plan<input type="file" id="fileImage" accept="image/*" hidden></label>
+    <label class="btn" title="PNG or JPG, a photo or a blueprint. You can also drag it onto the plan or paste a screenshot (Ctrl+V).">Load floor plan<input type="file" id="fileImage" accept="image/*" hidden></label>
     <label class="btn">Import measurements (CSV)<input type="file" id="fileCsv" accept=".csv,text/csv" hidden></label>
-    <button class="btn" id="btnDemo">Demo house</button>
+    <select class="btn" id="demoPick" aria-label="Open a demo"><option value="">Demos…</option></select>
     <span class="sep"></span>
     <button class="btn" id="btnSave">Save project</button>
     <label class="btn">Open project<input type="file" id="fileProject" accept=".json,application/json" hidden></label>
@@ -75,6 +75,19 @@
       <label class="field">Max new devices
         <input type="number" id="maxNew" min="1" max="6" step="1">
       </label>
+      <div id="imageBox">
+        <label class="field">Floor plan image
+          <select id="look">
+            <option value="normal">As it is (colour)</option>
+            <option value="gray">Black and white</option>
+            <option value="blueprint">Blueprint: dark lines on white</option>
+          </select>
+        </label>
+        <label class="field">Fade the image <span class="val" id="fadeVal"></span>
+          <input type="range" id="fade" min="0" max="80" step="5">
+        </label>
+        <button class="btn ghost" id="btnRemoveImage">Remove image</button>
+      </div>
       <details>
         <summary>Signal model</summary>
         <label class="field">Signal 1 m from router <span class="val" id="p1mVal"></span>

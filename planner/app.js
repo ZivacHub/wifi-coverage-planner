@@ -46,11 +46,14 @@
     walls: [], aps: [], areas: [], labels: [], measurements: [],
     suggested: [],
     settings: { band: "5", threshold: -75, backhaul: -70, mesh: true, maxNew: 3,
-                p1m: DEFAULT_P1M["5"], n: 3.0 },
+                p1m: DEFAULT_P1M["5"], n: 3.0,
+                look: "normal", fade: 0.25 },   // how the floor plan image is shown
   });
 
   let P = blank();
   let img = null;                 // HTMLImageElement of the floor plan
+  let imgView = null;             // the same image after "look" + fade (what is drawn)
+  let imageNotRemembered = false; // autosave had to leave the image out (too big)
   let tool = "move";
   let material = "drywall";
   let draft = null;               // wall/scale/area being drawn
@@ -88,7 +91,11 @@
   function wallLoss(ax, ay, bx, by) {
     let loss = 0;
     const band = P.settings.band;
+    const minX = Math.min(ax, bx), maxX = Math.max(ax, bx), minY = Math.min(ay, by), maxY = Math.max(ay, by);
     for (const w of P.walls) {
+      // quick skip: the wall is nowhere near this line
+      if ((w.x1 < minX && w.x2 < minX) || (w.x1 > maxX && w.x2 > maxX) ||
+          (w.y1 < minY && w.y2 < minY) || (w.y1 > maxY && w.y2 > maxY)) continue;
       if (crosses(ax, ay, bx, by, w.x1, w.y1, w.x2, w.y2)) loss += MATERIALS[w.mat].loss[band];
     }
     return loss;
@@ -263,7 +270,8 @@
     ctx.clearRect(0, 0, cv.width, cv.height);
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, cv.width, cv.height);
-    if (img) ctx.drawImage(img, 0, 0, P.w, P.h);
+    if (imgView) ctx.drawImage(imgView, 0, 0, P.w, P.h);
+    else if (img) ctx.drawImage(img, 0, 0, P.w, P.h);
     else drawGrid();
 
     // heatmap
@@ -361,17 +369,127 @@
   function drawGrid() {
     ctx.strokeStyle = "#eeece7";
     ctx.lineWidth = 1;
-    for (let x = 0; x < P.w; x += P.pxPerM) line(x, 0, x, P.h);
-    for (let y = 0; y < P.h; y += P.pxPerM) line(0, y, P.w, y);
+    // 1 m squares in a house, bigger squares on a town-sized plan
+    const g = P.pxPerM * ([1, 2, 5, 10, 20, 50, 100].find((m) => m * P.pxPerM >= 20) || 200);
+    for (let x = 0; x < P.w; x += g) line(x, 0, x, P.h);
+    for (let y = 0; y < P.h; y += g) line(0, y, P.w, y);
   }
   function drawScaleBar() {
-    const x = 14, y = P.h - 16, len = P.pxPerM * (P.pxPerM < 25 ? 5 : 1);
+    // pick a round length that is 50-150 px long on screen (1 m in a house, 50 m in a town)
+    const metres = [0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500].find((m) => m * P.pxPerM >= 50) || 1000;
+    const x = 14, y = P.h - 16, len = P.pxPerM * metres;
     ctx.fillStyle = "rgba(255,255,255,0.8)";
-    ctx.fillRect(x - 6, y - 16, len + 50, 26);
+    ctx.fillRect(x - 6, y - 16, len + 58, 26);
     ctx.strokeStyle = "#1d1f21"; ctx.lineWidth = 2;
     line(x, y, x + len, y); line(x, y - 4, x, y + 4); line(x + len, y - 4, x + len, y + 4);
     ctx.fillStyle = "#1d1f21"; ctx.font = "12px Segoe UI, sans-serif"; ctx.textAlign = "left";
-    ctx.fillText(P.pxPerM < 25 ? "5 m" : "1 m", x + len + 6, y);
+    ctx.fillText(metres + " m", x + len + 6, y);
+  }
+
+  // ------------------------------------------------------------ floor plan image look
+  // Blueprints are white lines on dark blue: the coloured signal map on top of
+  // that is hard to read. "Blueprint" mode turns it into dark lines on white.
+  function buildImgView() {
+    imgView = null;
+    if (!img) return;
+    const c = document.createElement("canvas");
+    c.width = P.w; c.height = P.h;
+    const g = c.getContext("2d");
+    g.drawImage(img, 0, 0, P.w, P.h);
+    const look = P.settings.look, fade = P.settings.fade;
+    if (look === "normal" && !fade) { imgView = c; return; }
+    let d;
+    try { d = g.getImageData(0, 0, c.width, c.height); } catch { imgView = c; return; }
+    const px = d.data;
+    const lum = (i) => 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2];
+    let lo = 0, hi = 255;
+    if (look === "blueprint") {
+      // after inverting, the background is the most common shade: make it white,
+      // the darkest lines black
+      const hist = new Uint32Array(256);
+      for (let i = 0; i < px.length; i += 16) hist[255 - Math.round(lum(i))]++;
+      hi = hist.indexOf(Math.max(...hist));
+      let count = 0; const total = px.length / 16;
+      for (lo = 0; lo < 255 && count < total * 0.01; lo++) count += hist[lo];
+      if (hi - lo < 30) { lo = 0; hi = 255; }
+    }
+    for (let i = 0; i < px.length; i += 4) {
+      let r = px[i], gg = px[i + 1], b = px[i + 2];
+      if (look !== "normal") {
+        let v = lum(i);
+        if (look === "blueprint") v = Math.max(0, Math.min(255, ((255 - v - lo) / (hi - lo)) * 255));
+        r = gg = b = v;
+      }
+      px[i] = r + (255 - r) * fade; px[i + 1] = gg + (255 - gg) * fade; px[i + 2] = b + (255 - b) * fade;
+    }
+    g.putImageData(d, 0, 0);
+    imgView = c;
+  }
+  // Is this image mostly dark or blue (a blueprint)?
+  function looksLikeBlueprint(im) {
+    const c = document.createElement("canvas");
+    c.width = 64; c.height = 64;
+    const g = c.getContext("2d");
+    g.drawImage(im, 0, 0, 64, 64);
+    let r = 0, gg = 0, b = 0, n = 0;
+    try {
+      const px = g.getImageData(0, 0, 64, 64).data;
+      for (let i = 0; i < px.length; i += 4) { if (px[i + 3] < 128) continue; r += px[i]; gg += px[i + 1]; b += px[i + 2]; n++; }
+    } catch { return false; }
+    if (!n) return false;
+    r /= n; gg /= n; b /= n;
+    const L = 0.299 * r + 0.587 * gg + 0.114 * b;
+    return L < 110 || (b > r + 30 && b > gg + 10 && L < 170);
+  }
+  function setImage(dataUrl, after) {
+    img = null; imgView = null;
+    if (!dataUrl) { after && after(); return; }
+    const im = new Image();
+    im.onload = () => { img = im; buildImgView(); after && after(); requestAnimationFrame(draw); };
+    im.src = dataUrl;
+  }
+
+  function loadImageFile(f) {
+    if (!f) return;
+    if (!/^image\//.test(f.type) && !/\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(f.name)) {
+      alert("That is not a picture. Use PNG or JPG. A PDF plan: open it, take a screenshot (Win+Shift+S) and paste it here with Ctrl+V.");
+      return;
+    }
+    const rd = new FileReader();
+    rd.onload = () => {
+      const im = new Image();
+      im.onerror = () => alert("Could not read that image. Try saving it as PNG or JPG first.");
+      im.onload = () => {
+        snapshot();
+        let nw = im.naturalWidth || 1200, nh = im.naturalHeight || 800;   // SVGs may have no size
+        // big scans get smaller, tiny screenshots bigger, so it is easy to draw on
+        const k = Math.min(1600 / Math.max(nw, nh), Math.max(1, 900 / Math.max(nw, nh)));
+        const w = Math.round(nw * k), h = Math.round(nh * k);
+        // store a copy at the size we draw it (keeps saved projects and autosave small)
+        const c = document.createElement("canvas");
+        c.width = w; c.height = h;
+        const g = c.getContext("2d");
+        g.fillStyle = "#fff"; g.fillRect(0, 0, w, h);          // transparent PNG -> white paper
+        g.drawImage(im, 0, 0, w, h);
+        let url = c.toDataURL("image/png");
+        if (url.length > 1.5e6) url = c.toDataURL("image/jpeg", 0.9);
+        const wasDemo = !!P.demo;
+        if (wasDemo) P = blank();     // don't draw the demo's walls on top of your plan
+        const blue = looksLikeBlueprint(im);
+        P.settings.look = blue ? "blueprint" : "normal";
+        P.settings.fade = blue ? 0 : 0.25;
+        P.image = url; P.w = w; P.h = h; P.suggested = [];
+        resize(); syncSettings();
+        setImage(url, () => {
+          setTool("scale"); changed();
+          $("hint").textContent = (wasDemo ? "New plan started with your image (Ctrl+Z goes back to the demo). " : "Floor plan loaded. ") +
+            (blue ? "It looks like a blueprint, so it is shown as dark lines on white (change it under Settings › Floor plan image). " : "") +
+            "First set the scale: " + HINTS.scale;
+        });
+      };
+      im.src = rd.result;
+    };
+    rd.readAsDataURL(f);
   }
   function line(x1, y1, x2, y2) { ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); }
   function node(n, color, glyph) {
@@ -478,7 +596,8 @@
   // ------------------------------------------------------------ changes, undo, autosave
   function snapshot() {
     const { image, ...rest } = P;
-    undo.push(JSON.stringify(rest));
+    // the image text is shared, not copied, so keeping it per step costs nothing
+    undo.push({ json: JSON.stringify(rest), image });
     if (undo.length > 60) undo.shift();
   }
   function changed() {
@@ -486,15 +605,27 @@
     requestAnimationFrame(draw);
     clearTimeout(changed.t);
     changed.t = setTimeout(() => {
-      try { localStorage.setItem("wcp-project", JSON.stringify(P)); }
-      catch { try { const { image, ...rest } = P; localStorage.setItem("wcp-project", JSON.stringify(rest)); } catch {} }
+      try { localStorage.setItem("wcp-project", JSON.stringify(P)); imageNotRemembered = false; }
+      catch {
+        try {
+          const { image, ...rest } = P; localStorage.setItem("wcp-project", JSON.stringify(rest));
+          if (image && !imageNotRemembered) {
+            imageNotRemembered = true;
+            $("hint").textContent = "Note: this floor plan image is too big for the browser to remember. Use \"Save project\" before closing, then \"Open project\" next time.";
+          }
+        } catch {}
+      }
     }, 400);
   }
   function doUndo() {
     if (!undo.length) return;
-    const prev = JSON.parse(undo.pop());
-    P = { ...prev, image: P.image };
+    const prev = undo.pop();
+    const oldImage = P.image, oldW = P.w, oldH = P.h, oldLook = P.settings.look + P.settings.fade;
+    P = { ...JSON.parse(prev.json), image: prev.image };
     selectedMeas = null;
+    if (P.w !== oldW || P.h !== oldH) resize();
+    if (P.image !== oldImage) setImage(P.image);
+    else if (P.settings.look + P.settings.fade !== oldLook) buildImgView();
     syncSettings(); changed();
   }
 
@@ -694,6 +825,9 @@
     $("maxNew").value = S.maxNew;
     $("p1m").value = S.p1m; $("p1mVal").textContent = S.p1m + " dBm";
     $("nExp").value = S.n; $("nVal").textContent = S.n.toFixed(1);
+    $("imageBox").style.display = P.image ? "" : "none";
+    $("look").value = S.look;
+    $("fade").value = Math.round(S.fade * 100); $("fadeVal").textContent = Math.round(S.fade * 100) + " %";
     refreshMaterialLabels();
   }
   function bindSetting(id, key, parse, resetSug = true) {
@@ -732,27 +866,36 @@
 
   // ------------------------------------------------------------ files
   $("fileImage").addEventListener("change", (e) => {
-    const f = e.target.files[0];
-    if (!f) return;
-    const rd = new FileReader();
-    rd.onload = () => {
-      const im = new Image();
-      im.onload = () => {
-        snapshot();
-        // keep big scans manageable
-        const k = Math.min(1, 1600 / Math.max(im.naturalWidth, im.naturalHeight));
-        P.image = rd.result; P.w = Math.round(im.naturalWidth * k); P.h = Math.round(im.naturalHeight * k);
-        img = im; resize(); setTool("scale"); changed();
-        $("hint").textContent = "Floor plan loaded. First set the scale: " + HINTS.scale;
-      };
-      im.src = rd.result;
-    };
-    rd.readAsDataURL(f);
+    loadImageFile(e.target.files[0]);
     e.target.value = "";
   });
+  // drag a picture onto the plan, or paste a screenshot with Ctrl+V
+  const wrap = $("wrap");
+  wrap.addEventListener("dragover", (e) => { e.preventDefault(); wrap.classList.add("drop"); });
+  wrap.addEventListener("dragleave", () => wrap.classList.remove("drop"));
+  wrap.addEventListener("drop", (e) => {
+    e.preventDefault(); wrap.classList.remove("drop");
+    const f = [...(e.dataTransfer?.files || [])][0];
+    if (!f) return;
+    if (/\.csv$/i.test(f.name)) { importCsvFile(f); return; }
+    loadImageFile(f);
+  });
+  window.addEventListener("paste", (e) => {
+    if (e.target.matches?.("input, textarea")) return;
+    const item = [...(e.clipboardData?.items || [])].find((i) => i.type.startsWith("image/"));
+    if (item) { e.preventDefault(); loadImageFile(item.getAsFile()); }
+  });
+
+  // floor plan image look (settings)
+  $("look").addEventListener("change", () => { snapshot(); P.settings.look = $("look").value; buildImgView(); syncSettings(); changed(); });
+  $("fade").addEventListener("input", () => { P.settings.fade = +$("fade").value / 100; buildImgView(); syncSettings(); changed(); });
+  $("btnRemoveImage").addEventListener("click", () => { snapshot(); P.image = null; setImage(null); syncSettings(); changed(); });
 
   $("fileCsv").addEventListener("change", (e) => {
-    const f = e.target.files[0];
+    importCsvFile(e.target.files[0]);
+    e.target.value = "";
+  });
+  function importCsvFile(f) {
     if (!f) return;
     f.text().then((txt) => {
       const rows = parseCsv(txt);
@@ -770,8 +913,7 @@
       $("hint").textContent = `Imported ${got.length} spots. Click where you stood for "${got[0].place}" (then the next one, and so on).`;
       changed();
     });
-    e.target.value = "";
-  });
+  }
   const num = (v) => (v === undefined || v === "" || v === null || isNaN(+v) ? null : +v);
   function parseCsv(txt) {
     const lines = txt.replace(/^﻿/, "").split(/\r?\n/).filter((l) => l.trim());
@@ -799,7 +941,17 @@
     e.target.value = "";
   });
   $("btnPng").addEventListener("click", () => cv.toBlob((b) => download(b, "wifi-coverage.png")));
-  $("btnDemo").addEventListener("click", () => { if (window.DEMO_PROJECT) { snapshot(); load(structuredClone(window.DEMO_PROJECT)); } });
+  const DEMOS = window.DEMOS || (window.DEMO_PROJECT ? { house: { name: "House", project: window.DEMO_PROJECT } } : {});
+  const demoPick = $("demoPick");
+  for (const [k, d] of Object.entries(DEMOS)) demoPick.add(new Option(d.name, k));
+  demoPick.addEventListener("change", () => {
+    const d = DEMOS[demoPick.value];
+    demoPick.value = "";
+    if (!d) return;
+    snapshot(); load(structuredClone(d.project));
+    setTool("move");
+    $("hint").textContent = d.hint || HINTS.move;
+  });
   $("btnNew").addEventListener("click", () => { if (confirm("Start a new empty plan? (Ctrl+Z brings the old one back)")) { snapshot(); load(blank()); } });
 
   function download(blob, name) {
@@ -812,20 +964,14 @@
     const b = blank();
     P = { ...b, ...p, settings: { ...b.settings, ...(p.settings || {}) } };
     selectedMeas = null;
-    img = null;
-    if (P.image) {
-      const im = new Image();
-      im.onload = () => { img = im; requestAnimationFrame(draw); };
-      im.src = P.image;
-    }
-    resize(); syncSettings(); changed();
+    resize(); setImage(P.image); syncSettings(); changed();
   }
   function resize() { cv.width = P.w; cv.height = P.h; }
 
   // ------------------------------------------------------------ start
   let saved = null;
   try { saved = JSON.parse(localStorage.getItem("wcp-project") || "null"); } catch {}
-  load(saved || structuredClone(window.DEMO_PROJECT || blank()));
+  load(saved || structuredClone(DEMOS.house?.project || blank()));
   setTool("move");
 
   // for tests in the browser console
